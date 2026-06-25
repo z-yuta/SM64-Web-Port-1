@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Super Mario 64</title>
+    <style>
+        body { 
+            margin: 0; 
+            background: #111; 
+            color: white; 
+            font-family: sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            overflow: hidden; 
+        }
+        #canvas { 
+            display: none; 
+            width: 100vw; 
+            height: 100vh; 
+            max-width: 1280px; 
+            max-height: 720px; 
+            background: black; 
+        }
+        #progress-container { 
+            width: 300px; 
+            padding: 20px; 
+            background: #222; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5); 
+        }
+        .bar-bg { 
+            width: 100%; 
+            background: #444; 
+            border-radius: 6px; 
+            overflow: hidden; 
+            margin-top: 4px; 
+        }
+        .bar-fill { 
+            height: 10px; 
+            width: 0%; 
+            transition: width 0.1s; 
+        }
+        #download-bar { background: #3b82f6; }
+        #extract-bar { background: #10b981; }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="progress-container">
+        <div style="margin-bottom: 6px;">Downloading... <span id="download-text">0%</span></div>
+        <div class="bar-bg">
+            <div id="download-bar" class="bar-fill"></div>
+        </div>
+        <div style="margin: 12px 0 6px;">Extracting... <span id="extract-text">0%</span></div>
+        <div class="bar-bg">
+            <div id="extract-bar" class="bar-fill"></div>
+        </div>
+    </div>
+
+    <script>
+        // Tell Emscripten to fetch the .wasm binary from your jsDelivr CDN repository pathway
+        var Module = {
+            canvas: document.getElementById('canvas'),
+            locateFile: function(path) {
+                if (path.endsWith('.wasm')) {
+                    return 'https://jsdelivr.net';
+                }
+                return path;
+            },
+            onRuntimeInitialized: function() {
+                // Clear out loading panels and show the viewport canvas upon asset initialization
+                document.getElementById('progress-container').style.display = 'none';
+                document.getElementById('canvas').style.display = 'block';
+                Module.canvas.focus();
+            }
+        };
+
+        async function fetchAndExecute() {
+            const downloadBar = document.getElementById('download-bar');
+            const downloadText = document.getElementById('download-text');
+            const extractBar = document.getElementById('extract-bar');
+            const extractText = document.getElementById('extract-text');
+
+            try {
+                // Fetch the main runtime launcher javascript code via the jsDelivr CDN hook
+                let response = await fetch('https://jsdelivr.net');
+                if (!response.ok) throw new Error("Network request failure");
+
+                const reader = response.body.getReader();
+                const contentLength = +response.headers.get('Content-Length') || 1200000;
+                let receivedLength = 0;
+                let chunks = [];
+
+                // Keep parsing network package arrays up to 100% completion 
+                while(true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    receivedLength += value.length;
+                    let percentage = Math.round((receivedLength / contentLength) * 100);
+                    downloadBar.style.width = Math.min(percentage, 100) + '%';
+                    downloadText.innerText = Math.min(percentage, 100) + '%';
+                }
+
+                // Smoothly step the engine initialization extraction bar 
+                for (let i = 0; i <= 100; i += 10) {
+                    await new Promise(r => setTimeout(r, 40));
+                    extractBar.style.width = i + '%';
+                    extractText.innerText = i + '%';
+                }
+
+                // Inject the pulled engine launcher text code directly as an active running frame module
+                let blob = new Blob(chunks, { type: 'application/javascript' });
+                let script = document.createElement('script');
+                script.src = URL.createObjectURL(blob);
+                document.body.appendChild(script);
+
+            } catch (err) {
+                downloadText.innerText = "Error Fetching Game Files!";
+                console.error(err);
+            }
+        }
+
+        window.addEventListener('load', fetchAndExecute);
+    </script>
+</body>
+</html>
